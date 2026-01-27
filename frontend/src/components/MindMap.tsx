@@ -26,6 +26,7 @@ interface MindMapProps {
   fontSize?: number;
   onAddComment: (nodeLabel: string, comment: string) => void;
   onSaveComments?: (comments: { nodeLabel: string; text: string; title?: string; tag?: string }[]) => void;
+  cleanWorkspaceRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 const nodeTypes = {
@@ -33,7 +34,7 @@ const nodeTypes = {
 };
 
 // Inner component that uses ReactFlow hooks
-function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 12, onAddComment, onSaveComments }: MindMapProps) {
+function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 12, onAddComment, onSaveComments, cleanWorkspaceRef }: MindMapProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeSignature, setActiveSignature] = React.useState<string | null>(null);
@@ -243,6 +244,13 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
   }, [nodes, edges, setNodes, fitView]);
 
+  // Expose cleanWorkspace to parent via ref
+  useEffect(() => {
+    if (cleanWorkspaceRef) {
+      cleanWorkspaceRef.current = cleanWorkspace;
+    }
+  }, [cleanWorkspace, cleanWorkspaceRef]);
+
   // --- HANDLERS ---
 
   // --- END HANDLERS ---
@@ -406,19 +414,6 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
 
   return (
     <div className={`w-full h-full relative ${darkMode ? "bg-zinc-950" : "bg-white"}`}>
-      {/* CLEAN WORKSPACE BUTTON */}
-      <button
-        onClick={cleanWorkspace}
-        title="Clean Workspace - Auto-organize all nodes"
-        className={`absolute top-4 right-4 z-50 p-3 rounded-lg shadow-lg border transition-all duration-200 hover:scale-105 ${
-          darkMode 
-            ? "bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600" 
-            : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
-        }`}
-      >
-        <LayoutGrid size={18} />
-      </button>
-
       {/* SEARCH BAR */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
         <div

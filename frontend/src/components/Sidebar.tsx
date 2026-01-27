@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { scanFolder, pickFolder } from "@/lib/api";
 import { FileNode } from "@/types";
-import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2 } from "lucide-react";
+import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2, LayoutGrid } from "lucide-react";
 import { clsx } from "clsx";
 
 interface SidebarProps {
@@ -15,12 +15,12 @@ interface SidebarProps {
   dotColor: string;
   setDotColor: (value: string) => void;
   fontSize: number;
-
   setFontSize: (value: number) => void;
   spacing: number;
   setSpacing: (value: number) => void;
   comments?: { nodeLabel: string; text: string }[];
   currentFile?: string;
+  onCleanWorkspace?: () => void;
 }
 
 // LocalStorage keys
@@ -42,7 +42,8 @@ export default function Sidebar({
   comments,
   spacing,
   setSpacing,
-  currentFile
+  currentFile,
+  onCleanWorkspace
 }: SidebarProps) {
   const [path, setPath] = useState("");
   const [rootNode, setRootNode] = useState<FileNode | null>(null);
@@ -317,6 +318,12 @@ export default function Sidebar({
           {/* SETTINGS SECTION */}
           <div className="mb-4 border-b border-zinc-700/50 pb-4">
             <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Settings</h3>
+            <button
+              onClick={onCleanWorkspace}
+              className="w-full text-left text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-2 py-1 hover:bg-zinc-800 rounded px-2 mb-2"
+            >
+              <LayoutGrid size={14} /> Clean Workspace
+            </button>
             <button
               onClick={handleClearCache}
               className="w-full text-left text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 py-1 hover:bg-zinc-800 rounded px-2"

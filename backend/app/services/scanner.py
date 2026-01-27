@@ -13,12 +13,17 @@ class ScannerService:
     Determines the storage path for the JSON metadata file.
     Strategy: 
     1. If root_path is provided: ALWAYS use {root_path}/assets/.visualizer/
-    2. Fallback (no root_path): {parent_of_target}/assets/.visualizer/
+    2. If not provided: auto-detect project root by looking for .git, existing assets, etc
+    3. Ultimate fallback: use grandparent directory (2 levels up from file)
     
     Filename: Collision-resistant based on relative path if root exists, else basename.
     """
     # Normalize paths to handle trailing slashes and different formats
     target_path = os.path.normpath(os.path.abspath(target_path))
+    
+    # If no root_path provided, try to auto-detect
+    if not root_path:
+      root_path = self._detect_project_root(target_path)
     
     if root_path:
       root_path = os.path.normpath(os.path.abspath(root_path))
@@ -39,16 +44,50 @@ class ScannerService:
       
       filename = f"meta_{safe_name}.json"
     else:
-      # FALLBACK (Single file mode, no root context)
+      # Ultimate fallback - shouldn't normally happen
       storage_dir = os.path.join(os.path.dirname(target_path), "assets", ".visualizer")
       filename = f"meta_{os.path.basename(target_path).replace('.', '_')}.json"
 
     if not os.path.exists(storage_dir):
       os.makedirs(storage_dir, exist_ok=True)
     
-    output_path = os.path.join(storage_dir, filename)
     print(f"[DEBUG] _get_storage_path: storage_dir={storage_dir}, filename={filename}")
-    return output_path
+    return os.path.join(storage_dir, filename)
+
+  def _detect_project_root(self, file_path: str) -> Optional[str]:
+    """
+    Auto-detect project root by traversing up the directory tree.
+    Looks for: .git folder, existing assets/.visualizer, or stops 3 levels up.
+    """
+    current = os.path.dirname(os.path.abspath(file_path))
+    levels = 0
+    max_levels = 5  # Don't go more than 5 levels up
+    
+    while current and levels < max_levels:
+      # Check for .git directory (common project root indicator)
+      if os.path.isdir(os.path.join(current, ".git")):
+        return current
+      
+      # Check for existing assets/.visualizer (we've used this folder before)
+      if os.path.isdir(os.path.join(current, "assets", ".visualizer")):
+        return current
+      
+      # Move up one level
+      parent = os.path.dirname(current)
+      if parent == current:
+        break  # Reached filesystem root
+      current = parent
+      levels += 1
+    
+    # Fallback: return the directory 2 levels up from the file
+    current = os.path.dirname(os.path.abspath(file_path))
+    for _ in range(2):
+      parent = os.path.dirname(current)
+      if parent == current:
+        break
+      current = parent
+    
+    return current
 
   def scanFolder(self, folderPath: str) -> Dict[str, Any]:
     # For folder scan, we usually assume folderPath IS the root

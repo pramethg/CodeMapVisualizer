@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import MindMap from "@/components/MindMap";
 import { Menu } from "lucide-react";
@@ -22,6 +22,9 @@ export default function Home() {
   const [currentPath, setCurrentPath] = useState<string>("");
   const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
   const [projectRoot, setProjectRoot] = useState<string>("");
+  
+  // Ref to expose cleanWorkspace function from MindMap
+  const cleanWorkspaceRef = useRef<(() => void) | null>(null);
 
   const handleFolderLoaded = (rootNode: FileNode) => {
     setCurrentView(`Folder: ${rootNode.name}`);
@@ -129,6 +132,7 @@ export default function Home() {
           fontSize={fontSize}
           onAddComment={handleAddComment}
           onSaveComments={handleSaveComments}
+          cleanWorkspaceRef={cleanWorkspaceRef}
         />
       </main>
 
@@ -148,6 +152,7 @@ export default function Home() {
         setSpacing={setSpacing}
         comments={comments}
         currentFile={currentPath}
+        onCleanWorkspace={() => cleanWorkspaceRef.current?.()}
       />
     </div>
   );
