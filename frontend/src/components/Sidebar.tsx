@@ -15,7 +15,10 @@ interface SidebarProps {
   dotColor: string;
   setDotColor: (value: string) => void;
   fontSize: number;
+
   setFontSize: (value: number) => void;
+  spacing: number;
+  setSpacing: (value: number) => void;
   comments?: { nodeLabel: string; text: string }[];
   currentFile?: string;
 }
@@ -37,6 +40,8 @@ export default function Sidebar({
   fontSize,
   setFontSize,
   comments,
+  spacing,
+  setSpacing,
   currentFile
 }: SidebarProps) {
   const [path, setPath] = useState("");
@@ -268,6 +273,28 @@ export default function Sidebar({
                   onClick={() => setFontSize(Math.min(48, fontSize + 1))}
                   className={`p-1 rounded transition-colors ${darkMode ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-zinc-200 hover:bg-zinc-300'}`}
                   title="Increase font size"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Spacing Control */}
+            <div className="flex items-center justify-between mt-3">
+              <span className="text-sm text-zinc-300">Layout Spacing</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSpacing(Math.max(10, spacing - 10))}
+                  className={`p-1 rounded transition-colors ${darkMode ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-zinc-200 hover:bg-zinc-300'}`}
+                  title="Decrease spacing"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="text-sm w-8 text-center">{spacing}</span>
+                <button
+                  onClick={() => setSpacing(Math.min(100, spacing + 10))}
+                  className={`p-1 rounded transition-colors ${darkMode ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-zinc-200 hover:bg-zinc-300'}`}
+                  title="Increase spacing"
                 >
                   <Plus size={14} />
                 </button>

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import MindMap from "@/components/MindMap";
 import { Menu } from "lucide-react";
-import { FileNode } from "@/types";
+import { FileNode, ScanFileResponse } from "@/types";
 import { scanFile, addComment, saveComments } from "@/lib/api";
 import { fileToGraph } from "@/lib/graphUtils";
 import { Node, Edge } from "@xyflow/react";
@@ -17,20 +17,31 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(true);
   const [dotColor, setDotColor] = useState("#333333");
   const [fontSize, setFontSize] = useState(12);
+  const [spacing, setSpacing] = useState(30); // Default spacing
   const [comments, setComments] = useState<{ nodeLabel: string; text: string }[]>([]);
   const [currentPath, setCurrentPath] = useState<string>("");
+  const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
 
   const handleFolderLoaded = (rootNode: FileNode) => {
     setCurrentView(`Folder: ${rootNode.name}`);
   };
 
+  // Re-calculate layout when spacing or data changes
+  React.useEffect(() => {
+    if (scanResult && currentPath) {
+      const fileName = currentPath.split('/').pop() || "File";
+      const { nodes: newNodes, edges: newEdges } = fileToGraph(scanResult, fileName, spacing);
+      setNodes(newNodes);
+      setEdges(newEdges);
+    }
+  }, [spacing, scanResult, currentPath]);
+
   const handleFileSelect = async (path: string) => {
     try {
       const result = await scanFile(path);
       const fileName = path.split('/').pop() || "File";
-      const { nodes: newNodes, edges: newEdges } = fileToGraph(result, fileName);
-      setNodes(newNodes);
-      setEdges(newEdges);
+
+      setScanResult(result); // Trigger layout effect
       setCurrentView(`File: ${fileName}`);
       setCurrentPath(path);
 
@@ -54,6 +65,17 @@ export default function Home() {
       const result = await addComment(currentPath, nodeLabel, text);
       if (result.comments) {
         setComments(result.comments);
+        // Also update scanResult to keep comments in sync for re-layouts if needed
+        // Assuming addComment returns updated structure or just comments?
+        // Usually addComment returns ScanFileResponse or similar.
+        // For safe side, we rely on comments state for Sidebar, but graph might need update if comments are nodes.
+        // If comments are nodes, we might need to update scanResult.comments too.
+        if (scanResult) {
+          setScanResult({
+            ...scanResult,
+            comments: result.comments
+          });
+        }
       }
     } catch (e) {
       console.error(e);
@@ -67,6 +89,12 @@ export default function Home() {
       const result = await saveComments(currentPath, newComments);
       if (result.comments) {
         setComments(result.comments);
+        if (scanResult) {
+          setScanResult({
+            ...scanResult,
+            comments: result.comments
+          });
+        }
       }
     } catch (e) {
       console.error("Failed to save comments", e);
@@ -114,6 +142,8 @@ export default function Home() {
         setDotColor={setDotColor}
         fontSize={fontSize}
         setFontSize={setFontSize}
+        spacing={spacing}
+        setSpacing={setSpacing}
         comments={comments}
         currentFile={currentPath}
       />
