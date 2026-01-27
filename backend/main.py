@@ -22,19 +22,18 @@ app.add_middleware(
 )
 
 # INITIALIZE SERVICES
-assetsPath = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
-if not os.path.exists(assetsPath):
-  os.makedirs(assetsPath)
-
-scannerService = ScannerService(assetsPath)
+# assetsPath removed from init, managed dynamically by service
+scannerService = ScannerService()
 
 class ScanRequest(BaseModel):
   path: str
+  rootPath: str | None = None
 
 class CommentRequest(BaseModel):
   path: str
   nodeLabel: str
   text: str
+  rootPath: str | None = None
 
 @app.get("/")
 async def rootHandler():
@@ -46,6 +45,7 @@ async def scanFolderHandler(request: ScanRequest):
     raise HTTPException(status_code=404, detail="Path not found")
   
   try:
+    # Scan folder structure
     result = scannerService.scanFolder(request.path)
     return result
   except Exception as e:
@@ -57,7 +57,7 @@ async def scanFileHandler(request: ScanRequest):
     raise HTTPException(status_code=404, detail="File not found")
     
   try:
-    result = scannerService.scanFile(request.path)
+    result = scannerService.scanFile(request.path, request.rootPath)
     return result
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
@@ -66,7 +66,7 @@ async def scanFileHandler(request: ScanRequest):
 async def addCommentHandler(request: CommentRequest):
   # Legacy endpoint
   try:
-    result = scannerService.addComment(request.path, request.nodeLabel, request.text)
+    result = scannerService.addComment(request.path, request.nodeLabel, request.text, request.rootPath)
     if "error" in result:
       raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -76,11 +76,12 @@ async def addCommentHandler(request: CommentRequest):
 class SaveCommentsRequest(BaseModel):
   path: str
   comments: list
+  rootPath: str | None = None
 
 @app.post("/api/save-comments")
 async def saveCommentsHandler(request: SaveCommentsRequest):
   try:
-    result = scannerService.saveComments(request.path, request.comments)
+    result = scannerService.saveComments(request.path, request.comments, request.rootPath)
     if "error" in result:
       raise HTTPException(status_code=400, detail=result["error"])
     return result

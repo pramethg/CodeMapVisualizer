@@ -21,9 +21,11 @@ export default function Home() {
   const [comments, setComments] = useState<{ nodeLabel: string; text: string }[]>([]);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
+  const [projectRoot, setProjectRoot] = useState<string>("");
 
   const handleFolderLoaded = (rootNode: FileNode) => {
     setCurrentView(`Folder: ${rootNode.name}`);
+    setProjectRoot(rootNode.path);
   };
 
   // Re-calculate layout when spacing or data changes
@@ -38,7 +40,7 @@ export default function Home() {
 
   const handleFileSelect = async (path: string) => {
     try {
-      const result = await scanFile(path);
+      const result = await scanFile(path, projectRoot);
       const fileName = path.split('/').pop() || "File";
 
       setScanResult(result); // Trigger layout effect
@@ -62,7 +64,7 @@ export default function Home() {
       return;
     }
     try {
-      const result = await addComment(currentPath, nodeLabel, text);
+      const result = await addComment(currentPath, nodeLabel, text, projectRoot);
       if (result.comments) {
         setComments(result.comments);
         // Also update scanResult to keep comments in sync for re-layouts if needed
@@ -86,7 +88,7 @@ export default function Home() {
   const handleSaveComments = async (newComments: { nodeLabel: string; text: string; title?: string; tag?: string }[]) => {
     if (!currentPath) return;
     try {
-      const result = await saveComments(currentPath, newComments);
+      const result = await saveComments(currentPath, newComments, projectRoot);
       if (result.comments) {
         setComments(result.comments);
         if (scanResult) {

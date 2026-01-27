@@ -108,9 +108,11 @@ export default function Sidebar({
       const result = await pickFolder();
       if (result.path) {
         setPath(result.path);
+        setError(null);
       }
     } catch (e) {
       console.error(e);
+      setError("Failed to open folder picker. Is backend running?");
     }
   };
 
