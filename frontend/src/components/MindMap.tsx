@@ -14,7 +14,8 @@ import {
   BackgroundVariant
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Search, X, Copy, Check, Download, ChevronUp, ChevronDown } from "lucide-react";
+import dagre from "dagre";
+import { Search, X, Copy, Check, Download, ChevronUp, ChevronDown, LayoutGrid } from "lucide-react";
 import CommentNode from "./CommentNode";
 
 interface MindMapProps {
@@ -196,6 +197,52 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     }
   }, [activeSignature]);
 
+  // --- CLEAN WORKSPACE / AUTO-LAYOUT ---
+  const cleanWorkspace = useCallback(() => {
+    const g = new dagre.graphlib.Graph();
+    g.setGraph({ 
+      rankdir: "LR",
+      nodesep: 40,
+      ranksep: 100,
+      marginx: 20,
+      marginy: 20
+    });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    // Add all nodes to the graph
+    nodes.forEach((node) => {
+      g.setNode(node.id, { 
+        width: node.width || (node.type === 'commentNode' ? 220 : 150), 
+        height: node.height || (node.type === 'commentNode' ? 80 : 40) 
+      });
+    });
+
+    // Add all edges to the graph
+    edges.forEach((edge) => {
+      g.setEdge(edge.source, edge.target);
+    });
+
+    // Run dagre layout
+    dagre.layout(g);
+
+    // Apply new positions to nodes
+    const layoutedNodes = nodes.map((node) => {
+      const nodeWithPosition = g.node(node.id);
+      return {
+        ...node,
+        position: {
+          x: nodeWithPosition.x - (nodeWithPosition.width || 0) / 2,
+          y: nodeWithPosition.y - (nodeWithPosition.height || 0) / 2,
+        },
+      };
+    });
+
+    setNodes(layoutedNodes);
+    
+    // Fit view after layout
+    setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
+  }, [nodes, edges, setNodes, fitView]);
+
   // --- HANDLERS ---
 
   // --- END HANDLERS ---
@@ -359,6 +406,19 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
 
   return (
     <div className={`w-full h-full relative ${darkMode ? "bg-zinc-950" : "bg-white"}`}>
+      {/* CLEAN WORKSPACE BUTTON */}
+      <button
+        onClick={cleanWorkspace}
+        title="Clean Workspace - Auto-organize all nodes"
+        className={`absolute top-4 right-4 z-50 p-3 rounded-lg shadow-lg border transition-all duration-200 hover:scale-105 ${
+          darkMode 
+            ? "bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600" 
+            : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+        }`}
+      >
+        <LayoutGrid size={18} />
+      </button>
+
       {/* SEARCH BAR */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
         <div
