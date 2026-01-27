@@ -1,6 +1,4 @@
 import os
-import tkinter as tk
-from tkinter import filedialog
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -53,6 +51,8 @@ async def scanFolderHandler(request: ScanRequest):
 
 @app.post("/api/scan-file")
 async def scanFileHandler(request: ScanRequest):
+  print(f"[DEBUG] scan-file: path={request.path}, rootPath={request.rootPath}")
+  
   if not os.path.exists(request.path):
     raise HTTPException(status_code=404, detail="File not found")
     
@@ -92,6 +92,7 @@ async def saveCommentsHandler(request: SaveCommentsRequest):
 async def pickFolderHandler():
   import sys
   import subprocess
+  import shutil
   
   if sys.platform == 'darwin':
     try:
@@ -110,23 +111,34 @@ async def pickFolderHandler():
       print(f"Mac Picker Error: {e}")
       raise HTTPException(status_code=500, detail="Failed to open macOS picker")
       
-  else:
-    # Linux / Windows fallback to tkinter
-    # Note: Requires DISPLAY environment variable on Linux to be set (X11 forwarding)
+  elif sys.platform.startswith('linux'):
+    # Try zenity (GNOME/GTK) first, then kdialog (KDE)
     try:
-      # We check availability by trying to import and initialize a root
-      cmd = [
-          sys.executable,
-          "-c",
-          "import tkinter as tk; from tkinter import filedialog; root = tk.Tk(); root.withdraw(); root.attributes('-topmost', True); print(filedialog.askdirectory())"
-      ]
-      result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
-      if not result:
-           return {"path": ""}
-      return {"path": result}
+      if shutil.which("zenity"):
+        cmd = ["zenity", "--file-selection", "--directory", "--title=Select Project Folder"]
+        result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
+        if result:
+          return {"path": result}
+        return {"path": ""}
+      elif shutil.which("kdialog"):
+        cmd = ["kdialog", "--getexistingdirectory", os.path.expanduser("~"), "--title", "Select Project Folder"]
+        result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
+        if result:
+          return {"path": result}
+        return {"path": ""}
+      else:
+        # No GUI picker available
+        print("No folder picker available (zenity/kdialog not found)")
+        return {"path": "", "message": "No folder picker available. Please enter the path manually in the input field."}
+    except subprocess.CalledProcessError:
+      # User cancelled the dialog
+      return {"path": ""}
     except Exception as e:
-      print(f"Tkinter Picker Error: {e}")
-      # If it fails (e.g. headless linux), we return a specific message or just empty
-      # Returning empty path with console log is safer than 500
-      print("Folder picker not supported or display not available on this OS.")
-      return {"path": "", "message": "Folder picker requires a desktop environment or X11 forwarding."}
+      print(f"Linux Picker Error: {e}")
+      return {"path": "", "message": "Folder picker failed. Please enter the path manually."}
+  
+  else:
+    # Windows or other - return message to use manual input
+    print("Folder picker not supported on this platform without tkinter")
+    return {"path": "", "message": "Folder picker not available. Please enter the path manually."}
+

@@ -18,6 +18,8 @@ CodeMap Visualizer is a developer tool designed to transform static source code 
     ```
 
 2.  **Backend Setup (FastAPI)**
+
+    **Option A: Using pip (traditional)**
     ```bash
     cd backend
     python -m venv venv
@@ -25,6 +27,16 @@ CodeMap Visualizer is a developer tool designed to transform static source code 
     pip install -r requirements.txt
     uvicorn main:app --reload
     ```
+
+    **Option B: Using uv (recommended, faster)**
+    ```bash
+    cd backend
+    uv venv
+    source .venv/bin/activate  # Windows: .venv\Scripts\activate
+    uv pip install -r requirements.txt
+    uvicorn main:app --reload
+    ```
+    
     The API will be available at `http://localhost:8000`.
 
 3.  **Frontend Setup (Next.js)**

@@ -8,6 +8,7 @@ class MatlabParser(BaseParser):
   - Multiple methods/properties blocks
   - Getter/setter functions (get.propName, set.propName)
   - Nested control flow (if/for/while/switch/try)
+  - Full function body extraction for definitions
   """
   
   def parse(self, filePath: str) -> Dict[str, Any]:
@@ -16,6 +17,7 @@ class MatlabParser(BaseParser):
     
     functions: List[str] = []
     signatures: Dict[str, str] = {}
+    definitions: Dict[str, str] = {}  # Full source code for each function
     classDetails: List[Dict[str, Any]] = []
 
     lines = fileContent.splitlines()
@@ -27,12 +29,17 @@ class MatlabParser(BaseParser):
     classIndent = None
     propsIndent = None
     
+    # For function body extraction
+    funcStartLine = None
+    funcName = None
+    funcNestLevel = 0
+    
     for i, rawLine in enumerate(lines):
         # Calculate indentation
         strippedLine = rawLine.lstrip()
         indent = len(rawLine) - len(strippedLine)
         
-        # Skip empty lines and comments
+        # Skip empty lines and comments for parsing logic
         if not strippedLine or strippedLine.startswith('%'):
             continue
         
@@ -40,6 +47,24 @@ class MatlabParser(BaseParser):
         codeLine = strippedLine.split('%')[0].strip()
         if not codeLine:
             continue
+        
+        # Track nested blocks for function body extraction
+        if funcStartLine is not None:
+            # Count block keywords
+            if re.match(r'^(if|for|while|switch|try|parfor)\b', codeLine):
+                funcNestLevel += 1
+            elif codeLine == 'end':
+                if funcNestLevel > 0:
+                    funcNestLevel -= 1
+                else:
+                    # This 'end' closes the function
+                    funcEndLine = i
+                    funcBody = '\n'.join(lines[funcStartLine:funcEndLine + 1])
+                    if funcName:
+                        definitions[funcName] = funcBody
+                    funcStartLine = None
+                    funcName = None
+                    funcNestLevel = 0
         
         # 1. CLASS DEF
         classMatch = re.search(r'^classdef\s*(?:\([^)]*\))?\s*(\w+)', codeLine)
@@ -73,6 +98,10 @@ class MatlabParser(BaseParser):
                 fName = funcMatch.group(1)
                 functions.append(fName)
                 signatures[fName] = codeLine
+                # Start tracking function body
+                funcStartLine = i
+                funcName = fName
+                funcNestLevel = 0
             continue
         
         # Inside a class from here on
@@ -103,6 +132,11 @@ class MatlabParser(BaseParser):
         if funcMatch:
             fullName = funcMatch.group(1)
             inProperties = False  # Can't be in properties if we see a function
+            
+            # Start tracking function body
+            funcStartLine = i
+            funcName = fullName
+            funcNestLevel = 0
             
             if '.' in fullName:
                 parts = fullName.split('.')
@@ -143,5 +177,6 @@ class MatlabParser(BaseParser):
       "functions": functions,
       "classes": [],
       "classDetails": classDetails,
-      "signatures": signatures
+      "signatures": signatures,
+      "definitions": definitions
     }

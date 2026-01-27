@@ -24,5 +24,7 @@ export interface ScanFileResponse {
   classes: string[];
   classDetails?: ClassDetail[];
   signatures?: Record<string, string>;
+  definitions?: Record<string, string>;  // functionName -> full source code
   comments?: { nodeLabel: string; text: string; title?: string; tag?: string }[];
 }
+

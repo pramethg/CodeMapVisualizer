@@ -40,6 +40,13 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
+  
+  // Triple-click detection state
+  const [showSourceModal, setShowSourceModal] = React.useState(false);
+  const [activeSourceCode, setActiveSourceCode] = React.useState<string | null>(null);
+  const [activeSourceLabel, setActiveSourceLabel] = React.useState<string>("");
+  const clickCountRef = useRef(0);
+  const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { fitView, setCenter, getZoom } = useReactFlow();
@@ -141,10 +148,11 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
         e.preventDefault();
         searchInputRef.current?.focus();
       }
-      // Escape to clear search
+      // Escape to clear search and close modals
       if (e.key === 'Escape') {
         setSearchQuery("");
         setActiveSignature(null);
+        setShowSourceModal(false);
         searchInputRef.current?.blur();
       }
       // Arrow keys to navigate matches
@@ -255,23 +263,56 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     setActiveSignature(null);
   }, []);
 
+  // Store last clicked node for multi-click reference
+  const lastClickedNodeRef = useRef<Node | null>(null);
+
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.data.signature) {
-        setActiveSignature(node.data.signature as string);
-      } else {
-        setActiveSignature(null);
+      // Store the node for reference in timeout
+      lastClickedNodeRef.current = node;
+      
+      // Multi-click detection
+      clickCountRef.current += 1;
+      
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
       }
-    },
-    []
-  );
-
-  const onNodeDoubleClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      // Zoom to node on double-click
-      zoomToNode(node.id);
+      
+      clickTimerRef.current = setTimeout(() => {
+        const clickedNode = lastClickedNodeRef.current;
+        
+        // Handle based on click count
+        if (clickCountRef.current >= 3 && clickedNode) {
+          // Triple-click: zoom to node / center
+          zoomToNode(clickedNode.id);
+        } else if (clickCountRef.current === 2 && clickedNode) {
+          // Double-click: show source code modal
+          if (clickedNode.data.sourceCode) {
+            setActiveSourceCode(clickedNode.data.sourceCode as string);
+            setActiveSourceLabel(clickedNode.data.label as string);
+            setShowSourceModal(true);
+          }
+        } else if (clickCountRef.current === 1 && clickedNode) {
+          // Single click: show signature
+          if (clickedNode.data.signature) {
+            setActiveSignature(clickedNode.data.signature as string);
+          } else {
+            setActiveSignature(null);
+          }
+        }
+        // Reset click count
+        clickCountRef.current = 0;
+      }, 350);
     },
     [zoomToNode]
+  );
+
+  // Disable React Flow's built-in double-click handler since we handle it ourselves
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, _node: Node) => {
+      // Do nothing - handled by our custom click detection above
+    },
+    []
   );
 
   const onNodeContextMenu = useCallback(
@@ -445,6 +486,58 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
                 {activeSignature}
               </code>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Source Code Modal (Triple-Click) */}
+      <AnimatePresence>
+        {showSourceModal && activeSourceCode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowSourceModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`relative max-w-4xl max-h-[80vh] w-full mx-4 rounded-xl shadow-2xl border overflow-hidden ${
+                darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200"
+              }`}
+            >
+              {/* Modal Header */}
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${
+                darkMode ? "border-zinc-700 bg-zinc-800" : "border-gray-200 bg-gray-50"
+              }`}>
+                <div>
+                  <div className="text-xs uppercase tracking-wider opacity-50 mb-1">Function Definition</div>
+                  <div className={`font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                    {activeSourceLabel}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSourceModal(false)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    darkMode ? "hover:bg-zinc-700 text-zinc-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              {/* Code Content */}
+              <div className="overflow-auto max-h-[calc(80vh-80px)] p-6">
+                <pre className={`font-mono text-sm leading-relaxed ${
+                  darkMode ? "text-green-400" : "text-gray-800"
+                }`}>
+                  <code>{activeSourceCode}</code>
+                </pre>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

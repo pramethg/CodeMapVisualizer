@@ -12,28 +12,43 @@ class ScannerService:
     """
     Determines the storage path for the JSON metadata file.
     Strategy: 
-    1. If root_path is provided: {root_path}/assets/.visualizer/
-    2. Fallback: {parent_of_target}/assets/.visualizer/
+    1. If root_path is provided: ALWAYS use {root_path}/assets/.visualizer/
+    2. Fallback (no root_path): {parent_of_target}/assets/.visualizer/
     
     Filename: Collision-resistant based on relative path if root exists, else basename.
     """
-    if root_path and target_path.startswith(root_path):
-      # ROOT BASED STORAGE
+    # Normalize paths to handle trailing slashes and different formats
+    target_path = os.path.normpath(os.path.abspath(target_path))
+    
+    if root_path:
+      root_path = os.path.normpath(os.path.abspath(root_path))
+      # ALWAYS use root_path for storage when provided
       storage_dir = os.path.join(root_path, "assets", ".visualizer")
       
-      # Relativize path and replace separators
-      rel_path = os.path.relpath(target_path, root_path)
-      safe_name = rel_path.replace(os.sep, "_").replace(".", "_") # e.g. src_components_Button_tsx
+      # Try to get relative path for collision-resistant filename
+      try:
+        rel_path = os.path.relpath(target_path, root_path)
+        # If rel_path goes outside root (starts with ..), use absolute path based name
+        if rel_path.startswith(".."):
+          safe_name = target_path.replace(os.sep, "_").replace(".", "_").replace(":", "_")
+        else:
+          safe_name = rel_path.replace(os.sep, "_").replace(".", "_")
+      except ValueError:
+        # On Windows, relpath can fail if paths are on different drives
+        safe_name = os.path.basename(target_path).replace(".", "_")
+      
       filename = f"meta_{safe_name}.json"
     else:
-      # FALLBACK (Single file mode or no root context)
+      # FALLBACK (Single file mode, no root context)
       storage_dir = os.path.join(os.path.dirname(target_path), "assets", ".visualizer")
       filename = f"meta_{os.path.basename(target_path).replace('.', '_')}.json"
 
     if not os.path.exists(storage_dir):
       os.makedirs(storage_dir, exist_ok=True)
-      
-    return os.path.join(storage_dir, filename)
+    
+    output_path = os.path.join(storage_dir, filename)
+    print(f"[DEBUG] _get_storage_path: storage_dir={storage_dir}, filename={filename}")
+    return output_path
 
   def scanFolder(self, folderPath: str) -> Dict[str, Any]:
     # For folder scan, we usually assume folderPath IS the root
