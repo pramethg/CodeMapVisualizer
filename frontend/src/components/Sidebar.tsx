@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { scanFolder, pickFolder } from "@/lib/api";
 import { FileNode } from "@/types";
-import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus } from "lucide-react";
+import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 
 interface SidebarProps {
@@ -119,6 +119,15 @@ export default function Sidebar({
   const handleFileClick = (filePath: string) => {
     addRecentFile(filePath);
     onFileSelect(filePath);
+  };
+
+  const handleClearCache = () => {
+    if (confirm("Are you sure you want to clear recent files and bookmarks? This cannot be undone.")) {
+      setRecentFiles([]);
+      setBookmarks([]);
+      localStorage.removeItem(RECENT_FILES_KEY);
+      localStorage.removeItem(BOOKMARKS_KEY);
+    }
   };
 
   const getFileName = (path: string) => path.split('/').pop() || path;
@@ -304,6 +313,18 @@ export default function Sidebar({
             </div>
           </div>
 
+
+          {/* SETTINGS SECTION */}
+          <div className="mb-4 border-b border-zinc-700/50 pb-4">
+            <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Settings</h3>
+            <button
+              onClick={handleClearCache}
+              className="w-full text-left text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-2 py-1 hover:bg-zinc-800 rounded px-2"
+            >
+              <Trash2 size={14} /> Clear History & Cache
+            </button>
+          </div>
+
           {/* FILE TREE */}
           {rootNode && (
             <div className="space-y-1">
@@ -317,8 +338,9 @@ export default function Sidebar({
             </div>
           )}
         </motion.div>
-      )}
-    </AnimatePresence>
+      )
+      }
+    </AnimatePresence >
   );
 }
 
