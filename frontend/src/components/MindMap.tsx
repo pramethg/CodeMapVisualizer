@@ -1,0 +1,462 @@
+import React, { useCallback, useMemo, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ReactFlow,
+  Controls,
+  Background,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
+  Node,
+  Edge,
+  BackgroundVariant
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { Search, X, Copy, Check, Download, ChevronUp, ChevronDown } from "lucide-react";
+import CommentNode from "./CommentNode";
+
+interface MindMapProps {
+  initialNodes: Node[];
+  initialEdges: Edge[];
+  darkMode: boolean;
+  dotColor: string;
+  fontSize?: number;
+  onAddComment: (nodeLabel: string, comment: string) => void;
+  onSaveComments?: (comments: { nodeLabel: string; text: string; title?: string; tag?: string }[]) => void;
+}
+
+const nodeTypes = {
+  commentNode: CommentNode
+};
+
+// Inner component that uses ReactFlow hooks
+function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 12, onAddComment, onSaveComments }: MindMapProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [activeSignature, setActiveSignature] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [searchFocused, setSearchFocused] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { fitView, setCenter, getZoom } = useReactFlow();
+
+  // --- HANDLERS ---
+  const handleUpdateComment = useCallback((nodeId: string, content: { text: string; title: string; tag?: string }) => {
+    setNodes((nds) => {
+      const updatedNodes = nds.map(n => {
+        if (n.id === nodeId) {
+          return { ...n, data: { ...n.data, label: content.text, title: content.title, tag: content.tag || n.data.tag || "none" } };
+        }
+        return n;
+      });
+
+      if (onSaveComments) {
+        const allComments = updatedNodes
+          .filter(n => n.type === 'commentNode')
+          .map(n => ({
+            nodeLabel: n.data.parentLabel as string || "Unknown",
+            text: n.data.label as string,
+            title: n.data.title as string,
+            tag: n.data.tag as string || "none"
+          }));
+        onSaveComments(allComments);
+      }
+      return updatedNodes;
+    });
+  }, [setNodes, onSaveComments]);
+
+  const handleDeleteComment = useCallback((nodeId: string) => {
+    let remainingNodes: Node[] = [];
+    setNodes((nds) => {
+      remainingNodes = nds.filter((n) => n.id !== nodeId);
+
+      if (onSaveComments) {
+        const allComments = remainingNodes
+          .filter(n => n.type === 'commentNode')
+          .map(n => ({
+            nodeLabel: n.data.parentLabel as string || "Unknown",
+            text: n.data.label as string,
+            title: n.data.title as string,
+            tag: n.data.tag as string || "none"
+          }));
+        onSaveComments(allComments);
+      }
+      return remainingNodes;
+    });
+    setEdges((eds) => eds.filter((e) => e.target !== nodeId && e.source !== nodeId));
+  }, [setNodes, setEdges, onSaveComments]);
+
+  // Helper to apply consistent styling
+  const getStyledNode = useCallback((node: Node, size: number) => {
+    const isComment = node.type === 'commentNode';
+    const baseStyle = {
+      ...node.style,
+      fontSize: size,
+      width: 'fit-content',
+      minWidth: 'min-content',
+      maxWidth: '600px', // Prevent extremely wide nodes
+      height: 'auto',
+      padding: '0.25em 0.8em', // Compact vertical padding
+    };
+
+    if (isComment) {
+      return {
+        ...node,
+        style: baseStyle,
+        data: {
+          ...node.data,
+          onUpdate: handleUpdateComment,
+          onDelete: handleDeleteComment
+        }
+      };
+    }
+
+    return {
+      ...node,
+      style: baseStyle
+    };
+  }, [handleUpdateComment, handleDeleteComment]);
+
+  // Sync with initial props
+  useEffect(() => {
+    const nodesWithHandlers = initialNodes.map(node => getStyledNode(node, fontSize));
+    setNodes(nodesWithHandlers);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges, getStyledNode, fontSize]);
+
+  // Update font size for existing nodes
+  useEffect(() => {
+    setNodes((nds) => nds.map(node => getStyledNode(node, fontSize)));
+  }, [fontSize, setNodes, getStyledNode]);
+
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + F to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      // Escape to clear search
+      if (e.key === 'Escape') {
+        setSearchQuery("");
+        setActiveSignature(null);
+        searchInputRef.current?.blur();
+      }
+      // Arrow keys to navigate matches
+      if (searchQuery && matchedNodeIds.size > 0) {
+        const matchArray = Array.from(matchedNodeIds);
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault();
+          const nextIndex = (currentMatchIndex + 1) % matchArray.length;
+          setCurrentMatchIndex(nextIndex);
+          zoomToNode(matchArray[nextIndex]);
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevIndex = (currentMatchIndex - 1 + matchArray.length) % matchArray.length;
+          setCurrentMatchIndex(prevIndex);
+          zoomToNode(matchArray[prevIndex]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchQuery, currentMatchIndex]);
+
+  // --- ZOOM TO NODE ---
+  const zoomToNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      const x = node.position.x + (node.width || 100) / 2;
+      const y = node.position.y + (node.height || 50) / 2;
+      setCenter(x, y, { zoom: 1.5, duration: 500 });
+    }
+  }, [nodes, setCenter]);
+
+  // --- COPY SIGNATURE ---
+  const copySignature = useCallback(() => {
+    if (activeSignature) {
+      navigator.clipboard.writeText(activeSignature);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [activeSignature]);
+
+  // --- HANDLERS ---
+
+  // --- END HANDLERS ---
+
+  // --- SEARCH LOGIC ---
+
+  const matchedNodeIds = useMemo(() => {
+    if (!searchQuery.trim()) return new Set<string>();
+    const query = searchQuery.toLowerCase();
+    const matches = new Set<string>();
+    nodes.forEach(node => {
+      const label = (node.data.label as string || "").toLowerCase();
+      if (label.includes(query)) {
+        matches.add(node.id);
+      }
+    });
+    return matches;
+  }, [searchQuery, nodes]);
+
+  // Reset match index when search changes
+  useEffect(() => {
+    setCurrentMatchIndex(0);
+  }, [searchQuery]);
+
+  const filteredNodes = useMemo(() => {
+    if (!searchQuery.trim()) return nodes;
+    const matchArray = Array.from(matchedNodeIds);
+    const currentMatchId = matchArray[currentMatchIndex];
+
+    return nodes.map(node => {
+      if (node.id === currentMatchId) {
+        // Current match - extra highlight
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            boxShadow: '0 0 30px 10px rgba(34, 197, 94, 0.7)', // Green glow for current
+            border: '3px solid #22c55e',
+            zIndex: 200
+          }
+        };
+      } else if (matchedNodeIds.has(node.id)) {
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            boxShadow: '0 0 20px 5px rgba(59, 130, 246, 0.6)',
+            border: '2px solid #3b82f6',
+            zIndex: 100
+          }
+        };
+      } else {
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            opacity: 0.3
+          }
+        };
+      }
+    });
+  }, [nodes, searchQuery, matchedNodeIds, currentMatchIndex]);
+
+  const onPaneClick = useCallback(() => {
+    setActiveSignature(null);
+  }, []);
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.data.signature) {
+        setActiveSignature(node.data.signature as string);
+      } else {
+        setActiveSignature(null);
+      }
+    },
+    []
+  );
+
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      // Zoom to node on double-click
+      zoomToNode(node.id);
+    },
+    [zoomToNode]
+  );
+
+  const onNodeContextMenu = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      e.preventDefault();
+      if (node.type === 'commentNode') return;
+
+      const parentId = node.id;
+      const label = node.data.label as string;
+
+      const newCommentId = `comment-${Date.now()}`;
+      const newCommentNode: Node = {
+        id: newCommentId,
+        type: 'commentNode',
+        position: {
+          x: node.position.x + (node.width || 100) + 50,
+          y: node.position.y
+        },
+        data: {
+          label: "",
+          title: "",
+          isNew: true,
+          parentId: parentId,
+          parentLabel: label,
+          onUpdate: handleUpdateComment,
+          onDelete: handleDeleteComment
+        },
+        style: { width: 220 }
+      };
+
+      const newEdge: Edge = {
+        id: `${parentId}-${newCommentId}`,
+        source: parentId,
+        target: newCommentId,
+        animated: false,
+        style: { stroke: '#d97706', strokeWidth: 1.5 }
+      };
+
+      setNodes((nds) => [...nds, newCommentNode]);
+      setEdges((eds) => [...eds, newEdge]);
+    },
+    [setNodes, setEdges, handleUpdateComment, handleDeleteComment]
+  );
+
+  return (
+    <div className={`w-full h-full relative ${darkMode ? "bg-zinc-950" : "bg-white"}`}>
+      {/* SEARCH BAR */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
+        <div
+          className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border transition-all duration-200 ${searchFocused
+            ? (darkMode ? "bg-zinc-800 border-blue-500 w-80" : "bg-white border-blue-500 w-80")
+            : (darkMode ? "bg-zinc-800/80 border-zinc-700 w-64" : "bg-white/80 border-gray-200 w-64")
+            }`}
+        >
+          <Search size={16} className={darkMode ? "text-zinc-400" : "text-gray-400"} />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder="Search (⌘F)"
+            className={`flex-1 bg-transparent outline-none text-sm ${darkMode ? "text-white placeholder-zinc-500" : "text-zinc-900 placeholder-gray-400"
+              }`}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className={`p-1 rounded-full hover:bg-zinc-700/50 transition-colors ${darkMode ? "text-zinc-400 hover:text-white" : "text-gray-400 hover:text-gray-600"
+                }`}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {/* Match navigation */}
+        {searchQuery && matchedNodeIds.size > 0 && (
+          <div className={`flex items-center justify-center gap-2 mt-2 ${darkMode ? "text-zinc-400" : "text-gray-500"}`}>
+            <button
+              onClick={() => {
+                const matchArray = Array.from(matchedNodeIds);
+                const prevIndex = (currentMatchIndex - 1 + matchArray.length) % matchArray.length;
+                setCurrentMatchIndex(prevIndex);
+                zoomToNode(matchArray[prevIndex]);
+              }}
+              className="p-1 rounded hover:bg-zinc-700/50"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <span className="text-xs">
+              <span className="font-bold text-green-500">{currentMatchIndex + 1}</span>
+              <span className="opacity-50"> / {matchedNodeIds.size}</span>
+            </span>
+            <button
+              onClick={() => {
+                const matchArray = Array.from(matchedNodeIds);
+                const nextIndex = (currentMatchIndex + 1) % matchArray.length;
+                setCurrentMatchIndex(nextIndex);
+                zoomToNode(matchArray[nextIndex]);
+              }}
+              className="p-1 rounded hover:bg-zinc-700/50"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ReactFlow
+        nodes={filteredNodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={onPaneClick}
+        fitView
+        className={darkMode ? "bg-zinc-950" : "bg-white"}
+      >
+        <Background color={dotColor} variant={BackgroundVariant.Dots} gap={20} />
+        <Controls
+          className={
+            darkMode
+              ? "bg-zinc-800 border-zinc-700 [&>button]:!bg-zinc-800 [&>button]:!border-zinc-700 [&>button]:!fill-zinc-200 [&>button:hover]:!bg-zinc-700"
+              : "bg-white border-gray-200 fill-gray-500"
+          }
+        />
+        {/* MINI-MAP */}
+        <MiniMap
+          nodeColor={(node) => {
+            if (node.type === 'commentNode') return '#fbbf24';
+            if (node.data.type === 'file') return '#3b82f6';
+            if (node.data.type === 'class') return '#8b5cf6';
+            if (node.data.type === 'function') return '#22c55e';
+            return darkMode ? '#52525b' : '#a1a1aa';
+          }}
+          maskColor={darkMode ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)"}
+          className={darkMode ? "bg-zinc-900 border-zinc-700" : "bg-gray-100 border-gray-200"}
+          pannable
+          zoomable
+        />
+      </ReactFlow>
+
+      {/* Function Info Panel with Copy Button */}
+      <AnimatePresence>
+        {activeSignature && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-50"
+          >
+            <div className={`px-6 py-3 rounded-lg shadow-xl border ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"}`}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs uppercase tracking-wider opacity-50">Function Signature</div>
+                <button
+                  onClick={copySignature}
+                  className={`p-1 rounded transition-colors pointer-events-auto ${copied
+                    ? "text-green-500"
+                    : (darkMode ? "text-zinc-400 hover:text-white" : "text-gray-400 hover:text-gray-600")
+                    }`}
+                  title="Copy to clipboard"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              </div>
+              <code className="font-mono text-sm block whitespace-pre max-w-[80vw] overflow-hidden text-ellipsis">
+                {activeSignature}
+              </code>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Wrapper component that provides ReactFlow context
+export default function MindMap(props: MindMapProps) {
+  return (
+    <ReactFlowProvider>
+      <MindMapInner {...props} />
+    </ReactFlowProvider>
+  );
+}
