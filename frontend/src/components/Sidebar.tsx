@@ -284,7 +284,7 @@ export default function Sidebar({
               <span className="text-sm text-zinc-300">Layout Spacing</span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setSpacing(Math.max(10, spacing - 10))}
+                  onClick={() => setSpacing(Math.max(2, spacing - 4))}
                   className={`p-1 rounded transition-colors ${darkMode ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-zinc-200 hover:bg-zinc-300'}`}
                   title="Decrease spacing"
                 >
@@ -292,7 +292,7 @@ export default function Sidebar({
                 </button>
                 <span className="text-sm w-8 text-center">{spacing}</span>
                 <button
-                  onClick={() => setSpacing(Math.min(100, spacing + 10))}
+                  onClick={() => setSpacing(Math.min(100, spacing + 4))}
                   className={`p-1 rounded transition-colors ${darkMode ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-zinc-200 hover:bg-zinc-300'}`}
                   title="Increase spacing"
                 >
