@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { FileNode } from "@/types";
+import { Folder, FileText } from "lucide-react";
 import {
   ReactFlow,
   Controls,
@@ -30,6 +32,8 @@ interface MindMapProps {
   projectRoot: string;
   filePath: string;
   onNotify?: (message: string | null) => void;
+  fileTree?: FileNode | null;
+  onFileSelect?: (path: string) => void;
 }
 
 const nodeTypes = {
@@ -37,7 +41,7 @@ const nodeTypes = {
 };
 
 // Inner component that uses ReactFlow hooks
-function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 18, onAddComment, onSaveComments, cleanWorkspaceRef, projectRoot, filePath, onNotify }: MindMapProps) {
+function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 18, onAddComment, onSaveComments, cleanWorkspaceRef, projectRoot, filePath, onNotify, fileTree, onFileSelect }: MindMapProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeSignature, setActiveSignature] = React.useState<string | null>(null);
@@ -47,6 +51,10 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
   const [copied, setCopied] = React.useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
   const [highlightedNodeIds, setHighlightedNodeIds] = React.useState<Set<string>>(new Set());
+
+  // File search state
+  const [fileSearchQuery, setFileSearchQuery] = React.useState("");
+  const [fileSearchFocused, setFileSearchFocused] = React.useState(false);
 
   // Triple-click detection state
   const [showSourceModal, setShowSourceModal] = React.useState(false);
@@ -275,6 +283,31 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
   // --- END HANDLERS ---
 
   // --- SEARCH LOGIC ---
+
+  // Flatten file tree for search
+  const searchableFiles = useMemo(() => {
+    if (!fileTree) return [];
+
+    const files: { name: string; path: string }[] = [];
+    const traverse = (node: FileNode) => {
+      if (node.type === 'file') {
+        files.push({ name: node.name, path: node.path });
+      }
+      if (node.children) {
+        node.children.forEach(traverse);
+      }
+    };
+    traverse(fileTree);
+    return files;
+  }, [fileTree]);
+
+  const matchedFiles = useMemo(() => {
+    if (!fileSearchQuery.trim()) return [];
+    const query = fileSearchQuery.toLowerCase();
+    return searchableFiles
+      .filter(f => f.name.toLowerCase().includes(query) || f.path.toLowerCase().includes(query))
+      .slice(0, 50); // Limit results
+  }, [fileSearchQuery, searchableFiles]);
 
   const matchedNodeIds = useMemo(() => {
     if (!searchQuery.trim()) return new Set<string>();
@@ -525,6 +558,72 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
             </button>
           </div>
         )}
+
+        {/* FILE SEARCH BAR */}
+        <div className="mt-2 relative">
+          <div
+            className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border transition-all duration-200 ${fileSearchFocused
+              ? (darkMode ? "bg-zinc-800 border-green-500 w-80" : "bg-white border-green-500 w-80")
+              : (darkMode ? "bg-zinc-800/80 border-zinc-700 w-64" : "bg-white/80 border-gray-200 w-64")
+              }`}
+          >
+            <FileText size={16} className={darkMode ? "text-zinc-400" : "text-gray-400"} />
+            <input
+              type="text"
+              value={fileSearchQuery}
+              onChange={(e) => setFileSearchQuery(e.target.value)}
+              onFocus={() => setFileSearchFocused(true)}
+              onBlur={() => setTimeout(() => setFileSearchFocused(false), 200)} // Delay for click handling
+              placeholder="Search File..."
+              className={`flex-1 bg-transparent outline-none text-sm ${darkMode ? "text-white placeholder-zinc-500" : "text-zinc-900 placeholder-gray-400"
+                }`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && matchedFiles.length > 0 && onFileSelect) {
+                  onFileSelect(matchedFiles[0].path);
+                  setFileSearchQuery("");
+                }
+              }}
+            />
+            {fileSearchQuery && (
+              <button
+                onClick={() => setFileSearchQuery("")}
+                className={`p-1 rounded-full hover:bg-zinc-700/50 transition-colors ${darkMode ? "text-zinc-400 hover:text-white" : "text-gray-400 hover:text-gray-600"
+                  }`}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* File Search Results Dropdown */}
+          {fileSearchFocused && fileSearchQuery && matchedFiles.length > 0 && (
+            <div className={`absolute top-full left-0 right-0 mt-2 max-h-60 overflow-y-auto rounded-xl shadow-2xl border z-50 ${darkMode ? "bg-zinc-800 border-zinc-700" : "bg-white border-gray-200"
+              }`}>
+              {matchedFiles.map((file, i) => (
+                <div
+                  key={file.path}
+                  onClick={() => {
+                    if (onFileSelect) {
+                      onFileSelect(file.path);
+                      setFileSearchQuery("");
+                    }
+                  }}
+                  className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm ${i === 0 ? (darkMode ? "bg-green-500/10" : "bg-green-50") : ""
+                    } ${darkMode
+                      ? "hover:bg-zinc-700 text-zinc-300 hover:text-white"
+                      : "hover:bg-gray-100 text-gray-700 hover:text-gray-900"
+                    }`}
+                >
+                  <FileText size={14} className="opacity-50" />
+                  <div className="flex-1 truncate">
+                    <div className="font-medium truncate">{file.name}</div>
+                    <div className="text-xs opacity-50 truncate">{file.path}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <ReactFlow

@@ -89,6 +89,30 @@ class ScannerService:
     
     return current
 
+  def _write_json_atomic(self, path: str, data: Any):
+    """
+    Writes JSON data to a file atomically.
+    Writes to a temp file first, then renames it to the target path.
+    This prevents race conditions where the file is truncated/empty during write.
+    """
+    import tempfile
+    dir_name = os.path.dirname(path)
+    # Create temp file in same dir to ensure atomic move works across filesystems
+    # We use a fixed suffix so we can easily ignore/clean them if needed, 
+    # but mkstemp is safer for uniqueness.
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix='.tmp', text=True)
+    
+    try:
+      with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+      # Atomic replace
+      os.replace(tmp_path, path)
+    except Exception as e:
+      # Clean up if something failed
+      if os.path.exists(tmp_path):
+        os.unlink(tmp_path)
+      raise e
+
   def scanFolder(self, folderPath: str) -> Dict[str, Any]:
     # For folder scan, we usually assume folderPath IS the root
     # But this method builds hierarchy. It doesn't write per-file metadata here necessarily?
@@ -109,8 +133,7 @@ class ScannerService:
     
     structure = self._buildHierarchy(folderPath)
     
-    with open(outputPath, 'w', encoding='utf-8') as outFile:
-      json.dump(structure, outFile, indent=2)
+    self._write_json_atomic(outputPath, structure)
       
     return structure
 
@@ -137,8 +160,7 @@ class ScannerService:
     if "comments" not in parsedData:
       parsedData["comments"] = []
 
-    with open(outputPath, 'w', encoding='utf-8') as outFile:
-      json.dump(parsedData, outFile, indent=2)
+    self._write_json_atomic(outputPath, parsedData)
       
     return parsedData
 
@@ -160,8 +182,7 @@ class ScannerService:
     # OVERWRITE COMMENTS
     data["comments"] = comments
     
-    with open(outputPath, 'w', encoding='utf-8') as outFile:
-      json.dump(data, outFile, indent=2)
+    self._write_json_atomic(outputPath, data)
       
     return data
 
@@ -186,8 +207,7 @@ class ScannerService:
       "timestamp": 0
     })
     
-    with open(outputPath, 'w', encoding='utf-8') as outFile:
-      json.dump(data, outFile, indent=2)
+    self._write_json_atomic(outputPath, data)
       
     return data
 

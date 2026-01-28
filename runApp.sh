@@ -6,7 +6,7 @@ fuser -k 8000/tcp 2>/dev/null
 
 # Start Backend
 cd backend
-source venv/bin/activate
+# source venv/bin/activate
 # Run uvicorn in background, detached
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
 BACKEND_PID=$!

@@ -23,6 +23,7 @@ export default function Home() {
   const [currentPath, setCurrentPath] = useState<string>("");
   const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
   const [projectRoot, setProjectRoot] = useState<string>("");
+  const [fileTree, setFileTree] = useState<FileNode | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
   // Ref to expose cleanWorkspace function from MindMap
@@ -39,6 +40,7 @@ export default function Home() {
   const handleFolderLoaded = async (rootNode: FileNode) => {
     setCurrentView(`Folder: ${rootNode.name}`);
     setProjectRoot(rootNode.path);
+    setFileTree(rootNode);
 
     // Check Linear Connection
     try {
@@ -171,7 +173,10 @@ export default function Home() {
           cleanWorkspaceRef={cleanWorkspaceRef}
           projectRoot={projectRoot}
           filePath={currentPath}
+
           onNotify={setNotification}
+          fileTree={fileTree}
+          onFileSelect={handleFileSelect}
         />
       </main>
 

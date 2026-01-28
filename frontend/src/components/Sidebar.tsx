@@ -26,6 +26,7 @@ interface SidebarProps {
 // LocalStorage keys
 const RECENT_FILES_KEY = 'codemap_recent_files';
 const BOOKMARKS_KEY = 'codemap_bookmarks';
+const SIDEBAR_WIDTH_KEY = 'codemap_sidebar_width';
 const MAX_RECENT = 10;
 
 export default function Sidebar({
@@ -52,6 +53,10 @@ export default function Sidebar({
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
 
+  // Resize state
+  const [sidebarWidth, setSidebarWidth] = useState(350);
+  const [isResizing, setIsResizing] = useState(false);
+
   // Load recent files and bookmarks from localStorage
   useEffect(() => {
     try {
@@ -59,6 +64,8 @@ export default function Sidebar({
       if (stored) setRecentFiles(JSON.parse(stored));
       const storedBookmarks = localStorage.getItem(BOOKMARKS_KEY);
       if (storedBookmarks) setBookmarks(JSON.parse(storedBookmarks));
+      const storedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      if (storedWidth) setSidebarWidth(parseInt(storedWidth, 10));
     } catch (e) {
       console.error("Failed to load from localStorage", e);
     }
@@ -66,13 +73,13 @@ export default function Sidebar({
 
   // Auto-update logic
   const [autoUpdate, setAutoUpdate] = useState(false);
-  
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (autoUpdate && currentFile) {
-       interval = setInterval(() => {
-         onFileSelect(currentFile);
-       }, 60000); // 1 minute
+      interval = setInterval(() => {
+        onFileSelect(currentFile);
+      }, 60000); // 1 minute
     }
     return () => clearInterval(interval);
   }, [autoUpdate, currentFile, onFileSelect]);
@@ -92,6 +99,42 @@ export default function Sidebar({
   useEffect(() => {
     localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks));
   }, [bookmarks]);
+
+  // Save sidebar width
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  // Handle Resize
+  const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = React.useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        // Sidebar is on the right, so new width = window width - mouse X
+        const newWidth = window.innerWidth - mouseMoveEvent.clientX;
+        if (newWidth > 250 && newWidth < 800) {
+          setSidebarWidth(newWidth);
+        }
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   const addRecentFile = (filePath: string) => {
     setRecentFiles(prev => {
@@ -160,8 +203,15 @@ export default function Sidebar({
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="fixed right-0 top-0 h-full w-80 bg-zinc-900 border-l border-zinc-700 shadow-2xl p-4 text-white z-50 overflow-y-auto"
+          style={{ width: sidebarWidth }}
+          className="fixed right-0 top-0 h-full bg-zinc-900 border-l border-zinc-700 shadow-2xl p-4 text-white z-50 overflow-y-auto"
         >
+          {/* RESIZE HANDLE */}
+          <div
+            className="absolute left-0 top-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-[60] -ml-0.5"
+            onMouseDown={startResizing}
+          />
+
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-white">
               Project Explorer
@@ -334,30 +384,30 @@ export default function Sidebar({
           </div>
 
           {/* UPDATE ACTIONS */}
-           <div className="mb-4 border-b border-zinc-700/50 pb-4">
+          <div className="mb-4 border-b border-zinc-700/50 pb-4">
             <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Update Structure</h3>
-             <div className="flex flex-col gap-2">
-               <button
-                 onClick={handleManualUpdate}
-                 disabled={!currentFile}
-                 className="flex items-center gap-2 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
-               >
-                 <RefreshCw size={14} className={loading && currentFile ? "animate-spin" : ""} />
-                 Update Current File
-               </button>
-               
-               <div className="flex items-center justify-between mt-1">
-                 <span className="text-sm text-zinc-300">Auto-update (1 min)</span>
-                 <button 
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleManualUpdate}
+                disabled={!currentFile}
+                className="flex items-center gap-2 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
+              >
+                <RefreshCw size={14} className={loading && currentFile ? "animate-spin" : ""} />
+                Update Current File
+              </button>
+
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-sm text-zinc-300">Auto-update (1 min)</span>
+                <button
                   onClick={() => setAutoUpdate(!autoUpdate)}
                   className={`text-zinc-300 hover:text-white transition-colors`}
                   title={autoUpdate ? "Disable Auto-update" : "Enable Auto-update"}
-                 >
-                   {autoUpdate ? <ToggleRight size={24} className="text-blue-500" /> : <ToggleLeft size={24} className="text-zinc-500" />}
-                 </button>
-               </div>
-             </div>
-           </div>
+                >
+                  {autoUpdate ? <ToggleRight size={24} className="text-blue-500" /> : <ToggleLeft size={24} className="text-zinc-500" />}
+                </button>
+              </div>
+            </div>
+          </div>
 
 
           {/* SETTINGS SECTION */}

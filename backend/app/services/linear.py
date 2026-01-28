@@ -159,6 +159,10 @@ LINEAR_PROJECT_ID=
         if github_link:
             full_description += f"\n\n---\nCode: {github_link}"
             
+        if title:
+            import string
+            title = string.capwords(title)
+
         full_title = f"{tag.upper()}: {title}" if tag and tag != "none" else title
 
         mutation = """
