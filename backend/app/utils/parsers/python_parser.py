@@ -13,18 +13,25 @@ class PythonParser(BaseParser):
     classes: List[str] = []
     signatures: Dict[str, str] = {}
     definitions: Dict[str, str] = {}  # Full source code for each function
+    locations: Dict[str, int] = {}    # Line number for each symbol
     classDetails: List[Dict[str, Any]] = []
 
     # TRAVERSE TOP-LEVEL NODES
+    lines = fileContent.splitlines()
+    
     for node in tree.body:
       if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
         funcName = node.name
         functions.append(funcName)
         signatures[funcName] = self._get_signature(node)
         definitions[funcName] = self._get_source(fileContent, node)
+        # Use accurate definition line
+        locations[funcName] = self._find_def_lineno(lines, node)
         
       elif isinstance(node, ast.ClassDef):
         classes.append(node.name)
+        # Use accurate definition line
+        locations[node.name] = self._find_def_lineno(lines, node)
         
         classInfo = {
           "name": node.name,
@@ -47,6 +54,12 @@ class PythonParser(BaseParser):
             signatures[methodName] = self._get_signature(item)
             definitions[methodName] = self._get_source(fileContent, item)
             definitions[qualifiedName] = self._get_source(fileContent, item)
+            
+            # Use accurate definition line
+            defLine = self._find_def_lineno(lines, item)
+            locations[qualifiedName] = defLine
+            # Also invoke short name if unique? Maybe risky. But qualified is safer.
+            locations[methodName] = defLine 
           
           elif isinstance(item, ast.Assign):
             # Class-level attributes
@@ -56,6 +69,8 @@ class PythonParser(BaseParser):
                   "name": target.id,
                   "attributes": []
                 })
+                locations[f"{node.name}.{target.id}"] = item.lineno
+                locations[target.id] = item.lineno # Short name convenient
         
         classDetails.append(classInfo)
 
@@ -65,8 +80,37 @@ class PythonParser(BaseParser):
       "classes": classes,
       "classDetails": classDetails,
       "signatures": signatures,
-      "definitions": definitions
+      "definitions": definitions,
+      "locations": locations
     }
+
+  def _find_def_lineno(self, lines: List[str], node: ast.AST) -> int:
+    """
+    Find the line number of the 'def' or 'class' keyword, skipping decorators.
+    """
+    if not hasattr(node, 'lineno'):
+        return 0
+        
+    startLine = node.lineno - 1 # 0-indexed
+    # If no decorators, the ast.lineno is usually the definition line
+    if hasattr(node, 'decorator_list') and not node.decorator_list:
+        return node.lineno
+        
+    # Scan forward looking for 'def ' or 'class '
+    import re
+    # We scan from startLine down to end_lineno (if available) or arbitrary limit
+    limit = getattr(node, 'end_lineno', startLine + 50)
+    
+    for i in range(startLine, limit):
+        if i >= len(lines):
+            break
+        line = lines[i]
+        # Match 'def <name>' or 'async def <name>' or 'class <name>'
+        # We need to be careful about indentation
+        if re.search(r'^\s*(async\s+)?(def|class)\s+', line):
+            return i + 1
+            
+    return node.lineno # Fallback
   
   def _get_signature(self, node: ast.FunctionDef) -> str:
     """Extract function signature as a string"""

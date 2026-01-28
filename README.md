@@ -100,3 +100,42 @@ CodeMap Visualizer is built for power users who demand precision and control.
 3.  **Visualize Code**: Click on any file in the file tree to generate its graph.
 4.  **Annotate**: Right-click nodes to add comments or tags.
 5.  **Configure**: Use the Sidebar settings to adjust layout density, font size, or clear application cache.
+
+## Integrations
+
+### Linear App Integration
+
+You can push comments directly to [Linear](https://linear.app/) from the CodeMap Visualizer.
+
+**Setup:**
+
+1.  **Select a Project Folder**: Open the app and select your project's root folder.
+2.  **Locate Configuration File**: The app will automatically create a configuration file at `assets/.visualizer/.env` within your project.
+    - Note: You may need to enable "Show Hidden Files" to see the `.visualizer` folder.
+3.  **Configure Credentials**: Open `assets/.visualizer/.env` and fill in the following:
+
+    ```env
+    LINEAR_API_KEY=lin_api_key_...
+    LINEAR_TEAM_ID=
+    LINEAR_PROJECT_ID=
+    ```
+
+**How to find your credentials:**
+
+*   **LINEAR_API_KEY** (Required):
+    1.  Go to Linear.
+    2.  Click on your profile picture (top left) → **Settings** (or Account).
+    3.  Select **API** from the sidebar.
+    4.  Under **Personal API keys** (sometimes labeled "Member API keys"), click **Create key**.
+    5.  Name it "CodeMapVisualizer" and copy the key (starts with `lin_`).
+
+*   **LINEAR_TEAM_ID** (Optional):
+    *   Navigate to the specific Team in Linear.
+    *   Press `Cmd/Ctrl + K` -> Search for **"Copy Team ID"**.
+    *   *If left blank, the app defaults to your first available team.*
+
+*   **LINEAR_PROJECT_ID** (Optional):
+    *   Navigate to the specific Project in Linear.
+    *   Press `Cmd/Ctrl + K` -> Search for **"Copy Project ID"**.
+    *   *If set, new issues will be automatically assigned to this project.*
+

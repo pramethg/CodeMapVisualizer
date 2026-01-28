@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.services.scanner import ScannerService
+from app.services.linear import LinearService
 
 app = FastAPI(title="CodeMapVisualizer Backend")
 
@@ -19,6 +20,7 @@ app.add_middleware(
 # INITIALIZE SERVICES
 # assetsPath removed from init, managed dynamically by service
 scannerService = ScannerService()
+linearService = LinearService()
 
 class ScanRequest(BaseModel):
   path: str
@@ -139,3 +141,37 @@ async def pickFolderHandler():
     print("Folder picker not supported on this platform without tkinter")
     return {"path": "", "message": "Folder picker not available. Please enter the path manually."}
 
+
+class LinearCheckRequest(BaseModel):
+  rootPath: str
+
+class LinearIssueRequest(BaseModel):
+  rootPath: str
+  title: str
+  description: str
+  filePath: str
+  lineNumber: int
+  tag: str
+
+@app.post("/api/linear/check-connection")
+async def checkLinearConnectionHandler(request: LinearCheckRequest):
+  try:
+    result = linearService.check_connection(request.rootPath)
+    return result
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/linear/create-issue")
+async def createLinearIssueHandler(request: LinearIssueRequest):
+  try:
+    result = linearService.create_issue(
+      request.rootPath, 
+      request.title, 
+      request.description, 
+      request.filePath, 
+      request.lineNumber,
+      request.tag
+    )
+    return result
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))

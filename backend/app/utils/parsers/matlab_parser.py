@@ -19,6 +19,7 @@ class MatlabParser(BaseParser):
     functions: List[str] = []
     signatures: Dict[str, str] = {}
     definitions: Dict[str, str] = {}  # Full source code for each function
+    locations: Dict[str, int] = {}    # Line number for each symbol
     classDetails: List[Dict[str, Any]] = []
 
     lines = fileContent.splitlines()
@@ -77,6 +78,7 @@ class MatlabParser(BaseParser):
             }
             classDetails.append(currentClass)
             signatures[className] = codeLine
+            locations[className] = i + 1
             classIndent = indent
             continue
         
@@ -98,6 +100,7 @@ class MatlabParser(BaseParser):
                 fName = funcMatch.group(1)
                 functions.append(fName)
                 signatures[fName] = codeLine
+                locations[fName] = i + 1
                 funcStartLine = i
                 funcName = fName
                 funcNestLevel = 0
@@ -141,6 +144,15 @@ class MatlabParser(BaseParser):
             baseName = fullName.split('.')[-1] if '.' in fullName else fullName
             allMethodNames.add(baseName)
             
+            # Line number
+            locations[fullName] = i + 1
+            # Also store short name if needed, though qualified is safer
+            if '.' not in fullName:
+                locations[fullName] = i + 1
+            else:
+                # Store simple name too? Maybe risky for methods
+                pass
+
             if '.' in fullName:
                 parts = fullName.split('.')
                 prefix = parts[0]
@@ -174,6 +186,8 @@ class MatlabParser(BaseParser):
                             "name": pName,
                             "attributes": []
                         })
+                        locations[f"{currentClass['name']}.{pName}"] = i + 1
+                        locations[pName] = i + 1
                         allPropertyNames.add(pName)
         
     # === DEPENDENCY ANALYSIS ===
@@ -192,7 +206,8 @@ class MatlabParser(BaseParser):
       "classDetails": classDetails,
       "signatures": signatures,
       "definitions": definitions,
-      "dependencies": dependencies
+      "dependencies": dependencies,
+      "locations": locations
     }
 
   def _extract_dependencies(
