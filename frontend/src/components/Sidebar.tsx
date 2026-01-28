@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { scanFolder, pickFolder } from "@/lib/api";
 import { FileNode } from "@/types";
-import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2, LayoutGrid } from "lucide-react";
+import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2, LayoutGrid, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
 import { clsx } from "clsx";
 
 interface SidebarProps {
@@ -63,6 +63,25 @@ export default function Sidebar({
       console.error("Failed to load from localStorage", e);
     }
   }, []);
+
+  // Auto-update logic
+  const [autoUpdate, setAutoUpdate] = useState(false);
+  
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (autoUpdate && currentFile) {
+       interval = setInterval(() => {
+         onFileSelect(currentFile);
+       }, 60000); // 1 minute
+    }
+    return () => clearInterval(interval);
+  }, [autoUpdate, currentFile, onFileSelect]);
+
+  const handleManualUpdate = () => {
+    if (currentFile) {
+      onFileSelect(currentFile);
+    }
+  };
 
   // Save recent files when they change
   useEffect(() => {
@@ -313,6 +332,32 @@ export default function Sidebar({
               </div>
             </div>
           </div>
+
+          {/* UPDATE ACTIONS */}
+           <div className="mb-4 border-b border-zinc-700/50 pb-4">
+            <h3 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Update Structure</h3>
+             <div className="flex flex-col gap-2">
+               <button
+                 onClick={handleManualUpdate}
+                 disabled={!currentFile}
+                 className="flex items-center gap-2 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
+               >
+                 <RefreshCw size={14} className={loading && currentFile ? "animate-spin" : ""} />
+                 Update Current File
+               </button>
+               
+               <div className="flex items-center justify-between mt-1">
+                 <span className="text-sm text-zinc-300">Auto-update (1 min)</span>
+                 <button 
+                  onClick={() => setAutoUpdate(!autoUpdate)}
+                  className={`text-zinc-300 hover:text-white transition-colors`}
+                  title={autoUpdate ? "Disable Auto-update" : "Enable Auto-update"}
+                 >
+                   {autoUpdate ? <ToggleRight size={24} className="text-blue-500" /> : <ToggleLeft size={24} className="text-zinc-500" />}
+                 </button>
+               </div>
+             </div>
+           </div>
 
 
           {/* SETTINGS SECTION */}
