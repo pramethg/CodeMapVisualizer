@@ -16,13 +16,13 @@ export default function Home() {
   const [currentView, setCurrentView] = useState<string>("Empty");
   const [darkMode, setDarkMode] = useState(true);
   const [dotColor, setDotColor] = useState("#333333");
-  const [fontSize, setFontSize] = useState(12);
-  const [spacing, setSpacing] = useState(30); // Default spacing
+  const [fontSize, setFontSize] = useState(18);
+  const [spacing, setSpacing] = useState(34); // Default spacing
   const [comments, setComments] = useState<{ nodeLabel: string; text: string }[]>([]);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
   const [projectRoot, setProjectRoot] = useState<string>("");
-  
+
   // Ref to expose cleanWorkspace function from MindMap
   const cleanWorkspaceRef = useRef<(() => void) | null>(null);
 

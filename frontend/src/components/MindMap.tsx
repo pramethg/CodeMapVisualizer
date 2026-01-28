@@ -34,15 +34,17 @@ const nodeTypes = {
 };
 
 // Inner component that uses ReactFlow hooks
-function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 12, onAddComment, onSaveComments, cleanWorkspaceRef }: MindMapProps) {
+function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 18, onAddComment, onSaveComments, cleanWorkspaceRef }: MindMapProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeSignature, setActiveSignature] = React.useState<string | null>(null);
+  const [activeSignatureType, setActiveSignatureType] = React.useState<string>("function");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [searchFocused, setSearchFocused] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = React.useState(0);
-  
+  const [highlightedNodeIds, setHighlightedNodeIds] = React.useState<Set<string>>(new Set());
+
   // Triple-click detection state
   const [showSourceModal, setShowSourceModal] = React.useState(false);
   const [activeSourceCode, setActiveSourceCode] = React.useState<string | null>(null);
@@ -99,6 +101,16 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     setEdges((eds) => eds.filter((e) => e.target !== nodeId && e.source !== nodeId));
   }, [setNodes, setEdges, onSaveComments]);
 
+  const getConnectedNodes = useCallback((nodeId: string) => {
+    const connected = new Set<string>();
+    connected.add(nodeId);
+    edges.forEach(e => {
+      if (e.source === nodeId) connected.add(e.target);
+      if (e.target === nodeId) connected.add(e.source);
+    });
+    return connected;
+  }, [edges]);
+
   // Helper to apply consistent styling
   const getStyledNode = useCallback((node: Node, size: number) => {
     const isComment = node.type === 'commentNode';
@@ -154,6 +166,7 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
       if (e.key === 'Escape') {
         setSearchQuery("");
         setActiveSignature(null);
+        setHighlightedNodeIds(new Set());
         setShowSourceModal(false);
         searchInputRef.current?.blur();
       }
@@ -201,7 +214,7 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
   // --- CLEAN WORKSPACE / AUTO-LAYOUT ---
   const cleanWorkspace = useCallback(() => {
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ 
+    g.setGraph({
       rankdir: "LR",
       nodesep: 40,
       ranksep: 100,
@@ -212,9 +225,9 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
 
     // Add all nodes to the graph
     nodes.forEach((node) => {
-      g.setNode(node.id, { 
-        width: node.width || (node.type === 'commentNode' ? 220 : 150), 
-        height: node.height || (node.type === 'commentNode' ? 80 : 40) 
+      g.setNode(node.id, {
+        width: node.width || (node.type === 'commentNode' ? 220 : 150),
+        height: node.height || (node.type === 'commentNode' ? 80 : 40)
       });
     });
 
@@ -239,7 +252,7 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     });
 
     setNodes(layoutedNodes);
-    
+
     // Fit view after layout
     setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 50);
   }, [nodes, edges, setNodes, fitView]);
@@ -276,6 +289,31 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
   }, [searchQuery]);
 
   const filteredNodes = useMemo(() => {
+    // 1. Highlight Connected Nodes (Priority)
+    if (highlightedNodeIds.size > 0) {
+      return nodes.map(node => {
+        if (highlightedNodeIds.has(node.id)) {
+          return {
+            ...node,
+            style: {
+              ...node.style,
+              opacity: 1,
+              border: '3px solid #8b5cf6', // Violet
+              boxShadow: '0 0 20px rgba(139, 92, 246, 0.4)',
+              zIndex: 100
+            }
+          };
+        }
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            opacity: 0.1
+          }
+        };
+      });
+    }
+
     if (!searchQuery.trim()) return nodes;
     const matchArray = Array.from(matchedNodeIds);
     const currentMatchId = matchArray[currentMatchIndex];
@@ -312,10 +350,11 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
         };
       }
     });
-  }, [nodes, searchQuery, matchedNodeIds, currentMatchIndex]);
+  }, [nodes, searchQuery, matchedNodeIds, currentMatchIndex, highlightedNodeIds]);
 
   const onPaneClick = useCallback(() => {
     setActiveSignature(null);
+    setHighlightedNodeIds(new Set());
   }, []);
 
   // Store last clicked node for multi-click reference
@@ -325,21 +364,22 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
     (_: React.MouseEvent, node: Node) => {
       // Store the node for reference in timeout
       lastClickedNodeRef.current = node;
-      
+
       // Multi-click detection
       clickCountRef.current += 1;
-      
+
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current);
       }
-      
+
       clickTimerRef.current = setTimeout(() => {
         const clickedNode = lastClickedNodeRef.current;
-        
+
         // Handle based on click count
         if (clickCountRef.current >= 3 && clickedNode) {
-          // Triple-click: zoom to node / center
-          zoomToNode(clickedNode.id);
+          // Triple-click: Highlight connected nodes
+          const connected = getConnectedNodes(clickedNode.id);
+          setHighlightedNodeIds(connected);
         } else if (clickCountRef.current === 2 && clickedNode) {
           // Double-click: show source code modal
           if (clickedNode.data.sourceCode) {
@@ -351,6 +391,7 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
           // Single click: show signature
           if (clickedNode.data.signature) {
             setActiveSignature(clickedNode.data.signature as string);
+            setActiveSignatureType(clickedNode.data.type as string || "function");
           } else {
             setActiveSignature(null);
           }
@@ -525,7 +566,9 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
           >
             <div className={`px-6 py-3 rounded-lg shadow-xl border ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"}`}>
               <div className="flex items-center justify-between mb-1">
-                <div className="text-xs uppercase tracking-wider opacity-50">Function Signature</div>
+                <div className="text-xs uppercase tracking-wider opacity-50">
+                  {activeSignatureType === 'property' ? 'Property Signature' : 'Function Signature'}
+                </div>
                 <button
                   onClick={copySignature}
                   className={`p-1 rounded transition-colors pointer-events-auto ${copied
@@ -560,14 +603,12 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className={`relative max-w-4xl max-h-[80vh] w-full mx-4 rounded-xl shadow-2xl border overflow-hidden ${
-                darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200"
-              }`}
+              className={`relative max-w-4xl max-h-[80vh] w-full mx-4 rounded-xl shadow-2xl border overflow-hidden ${darkMode ? "bg-zinc-900 border-zinc-700" : "bg-white border-gray-200"
+                }`}
             >
               {/* Modal Header */}
-              <div className={`flex items-center justify-between px-6 py-4 border-b ${
-                darkMode ? "border-zinc-700 bg-zinc-800" : "border-gray-200 bg-gray-50"
-              }`}>
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${darkMode ? "border-zinc-700 bg-zinc-800" : "border-gray-200 bg-gray-50"
+                }`}>
                 <div>
                   <div className="text-xs uppercase tracking-wider opacity-50 mb-1">Function Definition</div>
                   <div className={`font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
@@ -576,19 +617,17 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
                 </div>
                 <button
                   onClick={() => setShowSourceModal(false)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    darkMode ? "hover:bg-zinc-700 text-zinc-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
-                  }`}
+                  className={`p-2 rounded-lg transition-colors ${darkMode ? "hover:bg-zinc-700 text-zinc-400 hover:text-white" : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                    }`}
                 >
                   <X size={20} />
                 </button>
               </div>
-              
+
               {/* Code Content */}
               <div className="overflow-auto max-h-[calc(80vh-80px)] p-6">
-                <pre className={`font-mono text-sm leading-relaxed ${
-                  darkMode ? "text-green-400" : "text-gray-800"
-                }`}>
+                <pre className={`font-mono text-sm leading-relaxed ${darkMode ? "text-green-400" : "text-gray-800"
+                  }`}>
                   <code>{activeSourceCode}</code>
                 </pre>
               </div>

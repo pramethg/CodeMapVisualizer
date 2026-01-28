@@ -7,13 +7,10 @@ from app.services.scanner import ScannerService
 app = FastAPI(title="CodeMapVisualizer Backend")
 
 # CORS CONFIGURATION
-originsList = [
-  "http://localhost:3000",
-]
-
+# CORS CONFIGURATION
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=originsList,
+  allow_origin_regex="https?://.*",
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],
