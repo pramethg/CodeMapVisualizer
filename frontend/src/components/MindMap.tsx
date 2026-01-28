@@ -27,6 +27,9 @@ interface MindMapProps {
   onAddComment: (nodeLabel: string, comment: string) => void;
   onSaveComments?: (comments: { nodeLabel: string; text: string; title?: string; tag?: string }[]) => void;
   cleanWorkspaceRef?: React.MutableRefObject<(() => void) | null>;
+  projectRoot: string;
+  filePath: string;
+  onNotify?: (message: string | null) => void;
 }
 
 const nodeTypes = {
@@ -34,7 +37,7 @@ const nodeTypes = {
 };
 
 // Inner component that uses ReactFlow hooks
-function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 18, onAddComment, onSaveComments, cleanWorkspaceRef }: MindMapProps) {
+function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize = 18, onAddComment, onSaveComments, cleanWorkspaceRef, projectRoot, filePath, onNotify }: MindMapProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [activeSignature, setActiveSignature] = React.useState<string | null>(null);
@@ -131,7 +134,10 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
         data: {
           ...node.data,
           onUpdate: handleUpdateComment,
-          onDelete: handleDeleteComment
+          onDelete: handleDeleteComment,
+          projectRoot: projectRoot,
+          filePath: filePath,
+          onNotify: onNotify
         }
       };
     }
@@ -140,7 +146,7 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
       ...node,
       style: baseStyle
     };
-  }, [handleUpdateComment, handleDeleteComment]);
+  }, [handleUpdateComment, handleDeleteComment, projectRoot, filePath, onNotify]);
 
   // Sync with initial props
   useEffect(() => {
@@ -434,7 +440,10 @@ function MindMapInner({ initialNodes, initialEdges, darkMode, dotColor, fontSize
           parentId: parentId,
           parentLabel: label,
           onUpdate: handleUpdateComment,
-          onDelete: handleDeleteComment
+          onDelete: handleDeleteComment,
+          projectRoot: projectRoot,
+          filePath: filePath,
+          lineNumber: node.data.lineNumber || 0
         },
         style: { width: 220 }
       };

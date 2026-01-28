@@ -25,6 +25,7 @@ export interface ScanFileResponse {
   classDetails?: ClassDetail[];
   signatures?: Record<string, string>;
   definitions?: Record<string, string>;  // functionName -> full source code
+  locations?: Record<string, number>;    // functionName -> line number
   dependencies?: Record<string, { calls: string[]; uses_properties: string[] }>;
   comments?: { nodeLabel: string; text: string; title?: string; tag?: string }[];
 }

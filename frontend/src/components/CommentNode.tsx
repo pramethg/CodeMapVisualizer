@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Trash2, Tag } from 'lucide-react';
+import { Trash2, Tag, Send } from 'lucide-react';
+import { createLinearIssue } from '@/lib/api';
 
 // Tag configurations with colors
 const TAGS = [
@@ -18,6 +19,7 @@ const CommentNode = ({ data, id, selected }: NodeProps) => {
   const [tag, setTag] = useState((data.tag as string) || "none");
   const [isEditing, setIsEditing] = useState(false);
   const [showTagMenu, setShowTagMenu] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
 
   // Sync internal state
   useEffect(() => {
@@ -59,6 +61,55 @@ const CommentNode = ({ data, id, selected }: NodeProps) => {
       data.onDelete(id);
     }
   }, [id, data]);
+
+  const onPushToLinear = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const root = data.projectRoot as string;
+    const file = data.filePath as string;
+    // data.lineNumber might be 0, which is falsy, but valid.
+    const line = (data.lineNumber as number) ?? 0;
+
+    if (!root) {
+      if (data.onNotify) {
+        // @ts-ignore
+        data.onNotify("Missing project context (root). Please select a folder first.");
+      }
+      return;
+    }
+
+    setIsPushing(true);
+    try {
+      const res = await createLinearIssue(
+        root,
+        title || "Untitled Comment",
+        text || "",
+        file || "",
+        line,
+        tag
+      );
+
+      const notifyStr = (msg: string) => {
+        if (data.onNotify) {
+          // @ts-ignore
+          data.onNotify(msg);
+        } else {
+          console.log("No notify handler", msg);
+        }
+      };
+
+      if (res.success && res.issue) {
+        notifyStr(`Created ${res.issue.identifier}: ${title || "Untitled"}`);
+      } else if (res.success) {
+        notifyStr(`Issue created: ${title || "Untitled"}`);
+      } else {
+        notifyStr(`Failed: ${res.error}`);
+      }
+    } catch (err: any) {
+      notifyStr(`Error: ${err.message}`);
+    } finally {
+      setIsPushing(false);
+    }
+  }, [title, text, tag, data]);
 
   // Auto-focus on mount if new
   useEffect(() => {
@@ -142,6 +193,17 @@ const CommentNode = ({ data, id, selected }: NodeProps) => {
               </div>
             )}
           </div>
+
+          {/* Linear Button */}
+          <button
+            onClick={onPushToLinear}
+            title="Push to Linear"
+            disabled={isPushing}
+            className={`p-1 rounded hover:bg-yellow-300/50 transition-colors ${isPushing ? 'opacity-50 cursor-wait' : ''}`}
+            style={{ color: '#854d0e' }}
+          >
+            <Send size={16} className={isPushing ? "animate-pulse" : ""} />
+          </button>
 
           {/* Delete Button */}
           <button

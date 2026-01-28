@@ -5,7 +5,8 @@ import Sidebar from "@/components/Sidebar";
 import MindMap from "@/components/MindMap";
 import { Menu } from "lucide-react";
 import { FileNode, ScanFileResponse } from "@/types";
-import { scanFile, addComment, saveComments } from "@/lib/api";
+import { scanFile, addComment, saveComments, checkLinearConnection } from "@/lib/api";
+import { AnimatePresence, motion } from "framer-motion";
 import { fileToGraph } from "@/lib/graphUtils";
 import { Node, Edge } from "@xyflow/react";
 
@@ -22,13 +23,34 @@ export default function Home() {
   const [currentPath, setCurrentPath] = useState<string>("");
   const [scanResult, setScanResult] = useState<ScanFileResponse | null>(null);
   const [projectRoot, setProjectRoot] = useState<string>("");
+  const [notification, setNotification] = useState<string | null>(null);
 
   // Ref to expose cleanWorkspace function from MindMap
   const cleanWorkspaceRef = useRef<(() => void) | null>(null);
 
-  const handleFolderLoaded = (rootNode: FileNode) => {
+  // Clear notification after 5s
+  React.useEffect(() => {
+    if (notification) {
+      const t = setTimeout(() => setNotification(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [notification]);
+
+  const handleFolderLoaded = async (rootNode: FileNode) => {
     setCurrentView(`Folder: ${rootNode.name}`);
     setProjectRoot(rootNode.path);
+
+    // Check Linear Connection
+    try {
+      const result = await checkLinearConnection(rootNode.path);
+      if (result.connected) {
+        setNotification(`Linear App Connected as ${result.user.name}`);
+      } else if (result.message) {
+        setNotification(result.message);
+      }
+    } catch (e) {
+      console.error("Linear check failed", e);
+    }
   };
 
   // Re-calculate layout when spacing or data changes
@@ -122,6 +144,20 @@ export default function Home() {
         Viewing: <span className="font-semibold text-blue-500">{currentView}</span>
       </div>
 
+      {/* NOTIFICATION */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className={`fixed bottom-8 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl border z-50 font-medium ${darkMode ? "bg-zinc-800 border-zinc-700 text-white" : "bg-white border-zinc-200 text-zinc-900"}`}
+          >
+            {notification}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* MAIN CONTENT (MIND MAP) */}
       <main className="flex-1 relative">
         <MindMap
@@ -133,6 +169,9 @@ export default function Home() {
           onAddComment={handleAddComment}
           onSaveComments={handleSaveComments}
           cleanWorkspaceRef={cleanWorkspaceRef}
+          projectRoot={projectRoot}
+          filePath={currentPath}
+          onNotify={setNotification}
         />
       </main>
 
