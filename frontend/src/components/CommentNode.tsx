@@ -77,30 +77,36 @@ const CommentNode = ({ data, id, selected }: NodeProps) => {
       return;
     }
 
+    const toTitleCase = (str: string) => {
+      return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
+    const formattedTitle = toTitleCase(title || "Untitled Comment");
+
+    const notifyStr = (msg: string) => {
+      if (data.onNotify) {
+        // @ts-ignore
+        data.onNotify(msg);
+      } else {
+        console.log("No notify handler", msg);
+      }
+    };
+
     setIsPushing(true);
     try {
       const res = await createLinearIssue(
         root,
-        title || "Untitled Comment",
+        formattedTitle,
         text || "",
         file || "",
         line,
         tag
       );
 
-      const notifyStr = (msg: string) => {
-        if (data.onNotify) {
-          // @ts-ignore
-          data.onNotify(msg);
-        } else {
-          console.log("No notify handler", msg);
-        }
-      };
-
       if (res.success && res.issue) {
-        notifyStr(`Created ${res.issue.identifier}: ${title || "Untitled"}`);
+        notifyStr(`Created ${res.issue.identifier}: ${formattedTitle}`);
       } else if (res.success) {
-        notifyStr(`Issue created: ${title || "Untitled"}`);
+        notifyStr(`Issue created: ${formattedTitle}`);
       } else {
         notifyStr(`Failed: ${res.error}`);
       }
