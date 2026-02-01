@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { scanFolder, pickFolder } from "@/lib/api";
+import { scanFolder } from "@/lib/api";
 import { FileNode } from "@/types";
 import { Folder, File, ChevronRight, ChevronDown, X, Play, FolderOpen, Clock, Star, StarOff, Plus, Minus, Trash2, LayoutGrid, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
 import { clsx } from "clsx";
+import FolderPickerModal from "./FolderPickerModal";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -56,6 +57,7 @@ export default function Sidebar({
   // Resize state
   const [sidebarWidth, setSidebarWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   // Load recent files and bookmarks from localStorage
   useEffect(() => {
@@ -167,16 +169,7 @@ export default function Sidebar({
   };
 
   const handlePickFolder = async () => {
-    try {
-      const result = await pickFolder();
-      if (result.path) {
-        setPath(result.path);
-        setError(null);
-      }
-    } catch (e) {
-      console.error(e);
-      setError("Failed to open folder picker. Is backend running?");
-    }
+    setShowPicker(true);
   };
 
   const handleFileClick = (filePath: string) => {
@@ -442,6 +435,12 @@ export default function Sidebar({
         </motion.div>
       )
       }
+      <FolderPickerModal
+        isOpen={showPicker}
+        onClose={() => setShowPicker(false)}
+        onSelect={(newPath) => setPath(newPath)}
+        initialPath={path || undefined}
+      />
     </AnimatePresence >
   );
 }

@@ -30,3 +30,9 @@ export interface ScanFileResponse {
   comments?: { nodeLabel: string; text: string; title?: string; tag?: string }[];
 }
 
+export interface ListDirectoryResponse {
+  path: string;
+  parent: string;
+  folders: string[];
+  files: string[];
+}

@@ -87,59 +87,50 @@ async def saveCommentsHandler(request: SaveCommentsRequest):
   except Exception as e:
     raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/pick-folder")
-async def pickFolderHandler():
-  import sys
-  import subprocess
-  import shutil
+class ListDirectoryRequest(BaseModel):
+  path: str | None = None
+
+@app.post("/api/list-directory")
+async def listDirectoryHandler(request: ListDirectoryRequest):
+  import os
   
-  if sys.platform == 'darwin':
-    try:
-      cmd = [
-          "osascript",
-          "-e",
-          'POSIX path of (choose folder with prompt "Select Project Folder")'
-      ]
-      result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
-      if not result:
-           return {"path": ""}
-      return {"path": result}
-    except subprocess.CalledProcessError:
-      return {"path": ""}
-    except Exception as e:
-      print(f"Mac Picker Error: {e}")
-      raise HTTPException(status_code=500, detail="Failed to open macOS picker")
-      
-  elif sys.platform.startswith('linux'):
-    # Try zenity (GNOME/GTK) first, then kdialog (KDE)
-    try:
-      if shutil.which("zenity"):
-        cmd = ["zenity", "--file-selection", "--directory", "--title=Select Project Folder"]
-        result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
-        if result:
-          return {"path": result}
-        return {"path": ""}
-      elif shutil.which("kdialog"):
-        cmd = ["kdialog", "--getexistingdirectory", os.path.expanduser("~"), "--title", "Select Project Folder"]
-        result = subprocess.check_output(cmd, stderr=subprocess.PIPE).decode('utf-8').strip()
-        if result:
-          return {"path": result}
-        return {"path": ""}
+  target_path = request.path
+  if not target_path or target_path.strip() == "":
+    target_path = os.path.expanduser("~")
+  
+  if not os.path.exists(target_path):
+     raise HTTPException(status_code=404, detail="Path not found")
+  
+  if not os.path.isdir(target_path):
+     target_path = os.path.dirname(target_path)
+
+  try:
+    items = os.scandir(target_path)
+    folders = []
+    files = []
+    
+    for item in items:
+      if item.name.startswith('.'):
+        continue
+      if item.is_dir():
+        folders.append(item.name)
       else:
-        # No GUI picker available
-        print("No folder picker available (zenity/kdialog not found)")
-        return {"path": "", "message": "No folder picker available. Please enter the path manually in the input field."}
-    except subprocess.CalledProcessError:
-      # User cancelled the dialog
-      return {"path": ""}
-    except Exception as e:
-      print(f"Linux Picker Error: {e}")
-      return {"path": "", "message": "Folder picker failed. Please enter the path manually."}
-  
-  else:
-    # Windows or other - return message to use manual input
-    print("Folder picker not supported on this platform without tkinter")
-    return {"path": "", "message": "Folder picker not available. Please enter the path manually."}
+        files.append(item.name)
+        
+    folders.sort()
+    files.sort()
+    
+    parent = os.path.dirname(target_path)
+    
+    return {
+      "path": target_path,
+      "parent": parent,
+      "folders": folders,
+      "files": files
+    }
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=str(e))
+
 
 
 class LinearCheckRequest(BaseModel):
