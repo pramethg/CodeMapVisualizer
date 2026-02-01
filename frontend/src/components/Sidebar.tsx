@@ -63,9 +63,23 @@ export default function Sidebar({
   useEffect(() => {
     try {
       const stored = localStorage.getItem(RECENT_FILES_KEY);
-      if (stored) setRecentFiles(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Filter out empty strings and duplicates
+          const unique = Array.from(new Set(parsed)).filter((p): p is string => typeof p === 'string' && p.trim() !== "");
+          setRecentFiles(unique);
+        }
+      }
       const storedBookmarks = localStorage.getItem(BOOKMARKS_KEY);
-      if (storedBookmarks) setBookmarks(JSON.parse(storedBookmarks));
+      if (storedBookmarks) {
+        const parsed = JSON.parse(storedBookmarks);
+        if (Array.isArray(parsed)) {
+          // Filter out empty strings and duplicates
+          const unique = Array.from(new Set(parsed)).filter((b): b is string => typeof b === 'string' && b.trim() !== "");
+          setBookmarks(unique);
+        }
+      }
       const storedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
       if (storedWidth) setSidebarWidth(parseInt(storedWidth, 10));
     } catch (e) {
@@ -139,6 +153,7 @@ export default function Sidebar({
   }, [resize, stopResizing]);
 
   const addRecentFile = (filePath: string) => {
+    if (!filePath || filePath.trim() === "") return;
     setRecentFiles(prev => {
       const filtered = prev.filter(p => p !== filePath);
       return [filePath, ...filtered].slice(0, MAX_RECENT);
@@ -146,6 +161,7 @@ export default function Sidebar({
   };
 
   const toggleBookmark = (filePath: string) => {
+    if (!filePath || filePath.trim() === "") return;
     setBookmarks(prev => {
       if (prev.includes(filePath)) {
         return prev.filter(p => p !== filePath);
@@ -189,10 +205,12 @@ export default function Sidebar({
   const getFileName = (path: string) => path.split('/').pop() || path;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ x: "100%" }}
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="sidebar-panel"
+            initial={{ x: "100%" }}
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -435,13 +453,14 @@ export default function Sidebar({
         </motion.div>
       )
       }
+      </AnimatePresence >
       <FolderPickerModal
         isOpen={showPicker}
         onClose={() => setShowPicker(false)}
         onSelect={(newPath) => setPath(newPath)}
         initialPath={path || undefined}
       />
-    </AnimatePresence >
+    </>
   );
 }
 
